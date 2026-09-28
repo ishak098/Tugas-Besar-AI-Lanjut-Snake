@@ -86,3 +86,40 @@ class GreedyStrategy(MoveStrategy):
 #     def choose_move(self, snapshot, snake_id, rng):
 #         legal_moves = snapshot.legal_moves_for(snake_id)
 #         return legal_moves[0] if legal_moves else snapshot.snake(snake_id).direction
+
+@register_strategy("My Strategy")
+class AStarStrategy(MoveStrategy):
+    def choose_move(
+        self, snapshot: GameSnapshot, snake_id: str, rng: Random
+    ) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        snake = snapshot.snake(snake_id)
+        if not legal or not snapshot.apples:
+            return snake.direction
+
+        head_x, head_y = snake.body[0]
+        start = (head_x, head_y)
+
+        def heuristic(node: tuple[int, int]) -> int:
+            node_x, node_y = node
+            # Cari jarak apel paling dekat dengan snake
+            jarak_list = []
+            for apple_x, apple_y in snapshot.apples:
+                jarak = abs(node_x - apple_x) + abs(node_y - apple_y)
+                jarak_list.append(jarak)
+
+            nearest_apple_distance = min(jarak_list)
+            return nearest_apple_distance
+
+        apple_x, apple_y = heuristic(start)
+        open_list = [start]
+        closed_set = set()
+        parent_map = {}
+
+        g_score = {}
+        g_score[start] = 0
+
+        f_score = {}
+        f_score[start] = g_score[start] + (abs(head_x - apple_x) + abs(head_y - apple_y))
+
+        pass
