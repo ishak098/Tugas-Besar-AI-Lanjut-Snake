@@ -100,7 +100,7 @@ class AStarStrategy(MoveStrategy):
         head_x, head_y = snake.body[0]
         start = (head_x, head_y)
 
-        def heuristic(node: tuple[int, int]) -> int:
+        def direction(node: tuple[int, int]) -> int:
             node_x, node_y = node
             # Cari jarak apel paling dekat dengan snake
             jarak_list = []
@@ -109,17 +109,17 @@ class AStarStrategy(MoveStrategy):
                 jarak_list.append(jarak)
 
             nearest_apple_distance = min(jarak_list)
-            return nearest_apple_distance
+            apple_x, apple_y = nearest_apple_distance
+            open_list = [start]
+            closed_set = set()
+            parent_map = {}
 
-        apple_x, apple_y = heuristic(start)
-        open_list = [start]
-        closed_set = set()
-        parent_map = {}
+            g_score = {}
+            g_score[start] = 0
 
-        g_score = {}
-        g_score[start] = 0
+            f_score = {}
+            f_score[start] = g_score[start] + (abs(head_x - apple_x) + abs(head_y - apple_y))
 
-        f_score = {}
-        f_score[start] = g_score[start] + (abs(head_x - apple_x) + abs(head_y - apple_y))
-
+            return f_score[start]
+        
         pass
