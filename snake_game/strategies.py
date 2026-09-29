@@ -87,7 +87,7 @@ class GreedyStrategy(MoveStrategy):
 #         legal_moves = snapshot.legal_moves_for(snake_id)
 #         return legal_moves[0] if legal_moves else snapshot.snake(snake_id).direction
 
-@register_strategy("My Strategy")
+@register_strategy("AStar")
 class AStarStrategy(MoveStrategy):
     def choose_move(
         self, snapshot: GameSnapshot, snake_id: str, rng: Random
@@ -99,27 +99,65 @@ class AStarStrategy(MoveStrategy):
 
         head_x, head_y = snake.body[0]
         start = (head_x, head_y)
+        
+        OFFSETS = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        obstacles = set(snake.body)
 
-        def direction(node: tuple[int, int]) -> int:
+        def hiuristic(node: tuple[int, int]) -> int:
             node_x, node_y = node
             # Cari jarak apel paling dekat dengan snake
-            jarak_list = []
-            for apple_x, apple_y in snapshot.apples:
-                jarak = abs(node_x - apple_x) + abs(node_y - apple_y)
-                jarak_list.append(jarak)
+            return min(
+                abs(node_x - apple_x) + abs(node_y - apple_y)
+                for apple_x, apple_y in snapshot.apples
+            )
+        open_list = [start]
+        closed_set = set()
+        parent_map = {} #jejak selama dipapan game
 
-            nearest_apple_distance = min(jarak_list)
-            apple_x, apple_y = nearest_apple_distance
-            open_list = [start]
-            closed_set = set()
-            parent_map = {}
+        g_score = {start: 0}
 
-            g_score = {}
-            g_score[start] = 0
+        f_score = {start : g_score[start] + hiuristic(start)}
 
-            f_score = {}
-            f_score[start] = g_score[start] + (abs(head_x - apple_x) + abs(head_y - apple_y))
+        while open_list:
+            # ambil kordinat dengan nilai terkecil perhitungan dari f_score dengan key yang ada di open_list
+            current = min(open_list, key=f_score.get)
+            if current in snapshot.apples:
+                # untuk mendaftar jalur menuju apel
+                path = []
+                curr = current
+                while curr in parent_map:
+                    # tambah jalur dari apel ke kepala ular
+                    path.append(curr)
+                    # menelurusi jalur asal titik
+                    curr = parent_map[curr]
+                path.reverse()
 
-            return f_score[start]
-        
-        pass
+                # jika pathnya tidak kosong
+                if path:
+                    # kordinat pertama untuk bergerak
+                    next_x, next_y = path[0]
+                    # selisih dari kordinat kepala ular dan kordinat perpindahan
+                    dx, dy = next_x - head_x, next_y - head_y
+                    for move in legal:
+                        # selisihnya ada yang sama dengan arah (UDLR) atau tidak
+                        if move.vector == (dx, dy):
+                            return move
+            open_list.remove(current)
+            closed_set.add(current)
+
+            for dx, dy in OFFSETS:
+                new_x, new_y = current[0] + dx, current[1] + dy
+                new_node = (new_x, new_y)
+                if new_node in obstacles or new_node in closed_set:
+                    # Lewati jika node sudah dikunjungi
+                    continue
+                new_g_score = g_score[current] + 1
+                if new_node not in open_list or new_g_score < g_score[new_node]:
+                    parent_map[new_node] = current
+                    g_score[new_node] = new_g_score
+                    f_score[new_node] = new_g_score + hiuristic(new_node)
+                    if new_node not in open_list:
+                        open_list.append(new_node)
+
+        # Fallback jika rute ke apel terhalang
+        return rng.choice(legal)
