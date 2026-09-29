@@ -161,3 +161,44 @@ class AStarStrategy(MoveStrategy):
 
         # Fallback jika rute ke apel terhalang
         return rng.choice(legal)
+
+@register_strategy("Uniform Cost Search")
+class UCSStrategy(MoveStrategy):
+    def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        if not legal or not snapshot.apples:
+            return snapshot.snake(snake_id).direction
+
+        snake = snapshot.snake(snake_id)
+        head_x, head_y = snake.body[0]
+        body_set = set(snake.body)
+        
+        queue = []
+        visited = set()
+        visited.add((head_x, head_y))
+
+        for d in Direction:
+            dx, dy = d.vector
+            new_pos = (head_x + dx, head_y + dy)
+            if (0 <= new_pos[0] < snapshot.columns) and (0 <= new_pos[1] < snapshot.rows):
+                if new_pos not in body_set:
+                    queue.append((new_pos, d))
+                    visited.add(new_pos)
+
+        while queue:
+            curr_pos, first_dir = queue.pop(0) 
+            
+            if curr_pos in snapshot.apples:
+                return first_dir
+                
+            curr_x, curr_y = curr_pos
+            for d in Direction:
+                dx, dy = d.vector
+                next_pos = (curr_x + dx, curr_y + dy)
+                
+                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
+                    if next_pos not in body_set and next_pos not in visited:
+                        visited.add(next_pos)
+                        queue.append((next_pos, first_dir))
+                        
+        return rng.choice(legal)
