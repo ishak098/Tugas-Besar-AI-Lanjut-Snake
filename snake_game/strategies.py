@@ -249,3 +249,55 @@ class GBFSStrategy(MoveStrategy):
                         pq.append((h_next, next_pos, first_dir))
                         
         return rng.choice(legal)
+
+@register_strategy("Iterative Deepening Search")
+class IDSStrategy(MoveStrategy):
+    def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        if not legal or not snapshot.apples:
+            return snapshot.snake(snake_id).direction
+
+        snake = snapshot.snake(snake_id)
+        head_x, head_y = snake.body[0]
+        body_set = set(snake.body)
+        
+        op_count = [0] 
+        
+        def dls(pos, limit, visited):
+            op_count[0] += 1
+
+            if op_count[0] > 4000:
+                return False
+                
+            if pos in snapshot.apples:
+                return True
+            if limit <= 0:
+                return False
+                
+            curr_x, curr_y = pos
+            for d in Direction:
+                dx, dy = d.vector
+                next_pos = (curr_x + dx, curr_y + dy)
+                
+                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
+                    if next_pos not in body_set and next_pos not in visited:
+                        visited.add(next_pos)
+                        if dls(next_pos, limit - 1, visited):
+                            return True
+                        visited.remove(next_pos)
+            return False
+
+        MAX_DEPTH = 15 
+        
+        for limit in range(1, MAX_DEPTH + 1):
+            for d in Direction:
+                dx, dy = d.vector
+                next_pos = (head_x + dx, head_y + dy)
+                
+                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
+                    if next_pos not in body_set:
+                        visited_nodes = { (head_x, head_y), next_pos }
+                        if dls(next_pos, limit - 1, visited_nodes):
+                            return d
+                            
+        return rng.choice(legal)
