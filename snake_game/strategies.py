@@ -99,8 +99,7 @@ class AStarStrategy(MoveStrategy):
 
         head_x, head_y = snake.body[0]
         start = (head_x, head_y)
-        
-        OFFSETS = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        offset = [(0, -1), (0, 1), (-1, 0), (1, 0)]
         obstacles = set(snake.body)
 
         def hiuristic(node: tuple[int, int]) -> int:
@@ -145,7 +144,7 @@ class AStarStrategy(MoveStrategy):
             open_list.remove(current)
             closed_set.add(current)
 
-            for dx, dy in OFFSETS:
+            for dx, dy in offset:
                 new_x, new_y = current[0] + dx, current[1] + dy
                 new_node = (new_x, new_y)
                 if new_node in obstacles or new_node in closed_set:
