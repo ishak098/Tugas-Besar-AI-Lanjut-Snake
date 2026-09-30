@@ -101,6 +101,8 @@ class AStarStrategy(MoveStrategy):
         start = (head_x, head_y)
         offset = [(0, -1), (0, 1), (-1, 0), (1, 0)]
         obstacles = set(snake.body)
+        width = snapshot.width
+        height = snapshot.height
 
         def hiuristic(node: tuple[int, int]) -> int:
             node_x, node_y = node
@@ -147,6 +149,8 @@ class AStarStrategy(MoveStrategy):
             for dx, dy in offset:
                 new_x, new_y = current[0] + dx, current[1] + dy
                 new_node = (new_x, new_y)
+                if new_x < 0 or new_x >= with or new_y < 0 or new_y >= height:
+                    continue
                 if new_node in obstacles or new_node in closed_set:
                     # Lewati jika node sudah dikunjungi
                     continue
