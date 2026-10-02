@@ -149,7 +149,7 @@ class AStarStrategy(MoveStrategy):
             for dx, dy in offset:
                 new_x, new_y = current[0] + dx, current[1] + dy
                 new_node = (new_x, new_y)
-                if new_x < 0 or new_x >= with or new_y < 0 or new_y >= height:
+                if new_x < 0 or new_x >= width or new_y < 0 or new_y >= height:
                     continue
                 if new_node in obstacles or new_node in closed_set:
                     # Lewati jika node sudah dikunjungi
