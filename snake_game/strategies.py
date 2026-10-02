@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from random import Random
+from collections import deque
 
 from .models import Direction, GameSnapshot
 
@@ -309,49 +310,62 @@ class IDSStrategy(MoveStrategy):
 @register_strategy("Breadth First Search")
 class BFSStrategy(MoveStrategy):
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
-        # Ambil langkah aman dan cek ada apel di papan
-        legal = snapshot.legal_moves_for(snake_id) 
-        if not legal or not snapshot.apples:            # jika tidak ada langkah aman, lanjut langkah random
-            return snapshot.snake(snake_id).direction
-
-        # Ambil data ular dan rintangan (badan ular)
+        # validasi: ambil langkah legal
+        legal = snapshot.legal_moves_for(snake_id)
         snake = snapshot.snake(snake_id)
-        head_x, head_y = snake.body[0]      # ambil posisi ular
-        body_set = set(snake.body)          # ambil daftar koordinat badan
+        if not legal or not snapshot.apples:
+            return snake.direction
 
-        # Inisialisasi antrean BFS dan set lokasi yang sudah dikunjungi
-        queue = deque()         # membuat antrian BFS
-        visited = set()         # membuat set kosong untuk catat riwayat
-        visited.add((head_x, head_y))       # kepala sebagai titik awal
+        # inisialisasi titik awal, obstakel, dan dimensi papan
+        head_x, head_y = snake.body[0]
+        start = (head_x, head_y)
+        obstacles = set(snake.body)
+        width, height = snapshot.columns, snapshot.rows
+    
 
-        # Masukkan semua langkah awal yang valid (atas, bawah, kanan, kiri)
-        for d in Direction:
-            dx, dy = d.vector       # ambil nilai perubahan koordinat vektor
-            new_pos = (head_x + dx, head_y + dy)        # itung koordinat lokasi baru dari pergeseran arah
-            if (0 <= new_pos[0] < snapshot.columns) and (0 <= new_pos[1] < snapshot.rows):
-                if new_pos not in body_set:
-                    queue.append((new_pos, d))  # Simpan tuple (posisi, arah_awal)
-                    visited.add(new_pos)
+        # Queue FIFO dan struktur penelusuran jalur 
+        queue = deque([start])
+        visited = {start}
+        parent_map = {}
 
-        # Jalankan pencarian BFS (First-In, First-Out)
         while queue:
-            curr_pos, first_dir = queue.popleft()
+            current = queue.popleft()
 
-            # Memeriksa apakah lokasi yang sedang diperiksa saat ini berisi apel
-            if curr_pos in snapshot.apples:
-                return first_dir        # Jika posisi saat ini adalah apel, kembalikan arah langkah pertama
+            # jika ada apel, rekonstruksi jalur menuju titik pertama
+            if current in snapshot.apples:
+                curr = current
+                path = [0]
+                while curr in parent_map:
+                    path.append(curr)
+                    curr = parent_map[curr]
+                path.reverse()
 
-            curr_x, curr_y = curr_pos
-            for d in Direction:         # mengecek 4 arah terdekat
-                dx, dy = d.vector
-                next_pos = (curr_x + dx, curr_y + dy)
+                # jika pathnya tidak kosong
+                if path:
+                    # koordinat pertama untuk bergerak
+                    next_x, next_y = path[0]
+                    # selisih dari kordinat kepala ular dan kordinat perpindahan
+                    dx, dy = next_x - head_x, next_y - head_y
+                    for move in legal:
+                        # selisihnya ada yang sama dengan arah (UDLR) atau tidak
+                        if move.vector == (dx, dy):
+                            return move
+            # eksplore 4 arah
+            curr_x, curr_y = current
+            for move in Direction:
+                dx, dy = move.vector
+                new_x, new_y = curr_x + dx, curr_y + dy
+                new_node = (new_x, new_y)
+                if not (0 <= new_x < width and 0 <= new_y < height):
+                    continue
 
-                # Pengecekan batas area papan dan rintangan
-                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
-                    if next_pos not in body_set and next_pos not in visited:
-                        visited.add(next_pos)
-                        queue.append((next_pos, first_dir))
+                if new_node in obstacles or new_node in visited:
+                    continue
 
-        # Fallback jika rute ke apel terhalang / tidak ditemukan
+                visited.add(new_node)
+                parent_map[new_node] = current
+                queue.append(new_node)
+
         return rng.choice(legal)
+
 
