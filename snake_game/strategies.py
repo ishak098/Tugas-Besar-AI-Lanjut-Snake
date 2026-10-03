@@ -298,17 +298,19 @@ class IDSStrategy(MoveStrategy):
         head_x, head_y = snake.body[0]
         body_set = set(snake.body)
         
-        op_count = [0] 
+        MAX_NODES = 4000
+        nodes_visited = [0] 
         
-        def dls(pos, limit, visited):
-            op_count[0] += 1
-
-            if op_count[0] > 4000:
+        def dfs_explore(pos, current_depth_limit, visited):
+            nodes_visited[0] += 1
+            
+            if nodes_visited[0] > MAX_NODES:
                 return False
                 
             if pos in snapshot.apples:
                 return True
-            if limit <= 0:
+                
+            if current_depth_limit <= 0:
                 return False
                 
             curr_x, curr_y = pos
@@ -319,23 +321,27 @@ class IDSStrategy(MoveStrategy):
                 if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
                     if next_pos not in body_set and next_pos not in visited:
                         visited.add(next_pos)
-                        if dls(next_pos, limit - 1, visited):
+                        
+                        if dfs_explore(next_pos, current_depth_limit - 1, visited):
                             return True
+                            
                         visited.remove(next_pos)
+                        
             return False
 
-        MAX_DEPTH = 15 
+        MAX_VISION_RADIUS = 15 
         
-        for limit in range(1, MAX_DEPTH + 1):
-            for d in Direction:
-                dx, dy = d.vector
-                next_pos = (head_x + dx, head_y + dy)
+        for bfs_radius in range(1, MAX_VISION_RADIUS + 1):
+            for start_dir in Direction:
+                dx, dy = start_dir.vector
+                start_pos = (head_x + dx, head_y + dy)
                 
-                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
-                    if next_pos not in body_set:
-                        visited_nodes = { (head_x, head_y), next_pos }
-                        if dls(next_pos, limit - 1, visited_nodes):
-                            return d
+                if (0 <= start_pos[0] < snapshot.columns) and (0 <= start_pos[1] < snapshot.rows):
+                    if start_pos not in body_set:
+                        initial_visited = { (head_x, head_y), start_pos }
+                        
+                        if dfs_explore(start_pos, bfs_radius - 1, initial_visited):
+                            return start_dir
                             
         return rng.choice(legal)
 
