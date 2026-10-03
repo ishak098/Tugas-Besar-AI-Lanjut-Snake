@@ -170,87 +170,120 @@ class AStarStrategy(MoveStrategy):
 class UCSStrategy(MoveStrategy):
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
         legal = snapshot.legal_moves_for(snake_id)
-        if not legal or not snapshot.apples:
-            return snapshot.snake(snake_id).direction
-
         snake = snapshot.snake(snake_id)
+        if not legal or not snapshot.apples:
+            return snake.direction
+
         head_x, head_y = snake.body[0]
-        body_set = set(snake.body)
+        start = (head_x, head_y)
+        obstacles = set(snake.body)
         
-        queue = []
-        visited = set()
-        visited.add((head_x, head_y))
+        open_list = [start]
+        closed_set = set()
+        parent_map = {}
 
-        for d in Direction:
-            dx, dy = d.vector
-            new_pos = (head_x + dx, head_y + dy)
-            if (0 <= new_pos[0] < snapshot.columns) and (0 <= new_pos[1] < snapshot.rows):
-                if new_pos not in body_set:
-                    queue.append((new_pos, d))
-                    visited.add(new_pos)
+        g_score = {start: 0} 
 
-        while queue:
-            curr_pos, first_dir = queue.pop(0) 
+        while open_list:
+            current = min(open_list, key=g_score.get)
             
-            if curr_pos in snapshot.apples:
-                return first_dir
+            if current in snapshot.apples:
+                path = []
+                curr = current
+                while curr in parent_map:
+                    path.append(curr)
+                    curr = parent_map[curr]
+                path.reverse()
                 
-            curr_x, curr_y = curr_pos
+                if path:
+                    next_x, next_y = path[0]
+                    dx, dy = next_x - head_x, next_y - head_y
+                    for move in legal:
+                        if move.vector == (dx, dy):
+                            return move
+                            
+            open_list.remove(current)
+            closed_set.add(current)
+
             for d in Direction:
                 dx, dy = d.vector
-                next_pos = (curr_x + dx, curr_y + dy)
+                new_x, new_y = current[0] + dx, current[1] + dy
+                new_node = (new_x, new_y)
                 
-                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
-                    if next_pos not in body_set and next_pos not in visited:
-                        visited.add(next_pos)
-                        queue.append((next_pos, first_dir))
+                if not (0 <= new_x < snapshot.columns and 0 <= new_y < snapshot.rows):
+                    continue
+                if new_node in obstacles or new_node in closed_set:
+                    continue
+                    
+                new_g_score = g_score[current] + 1
+                
+                if new_node not in open_list or new_g_score < g_score[new_node]:
+                    parent_map[new_node] = current
+                    g_score[new_node] = new_g_score
+                    
+                    if new_node not in open_list:
+                        open_list.append(new_node)
                         
         return rng.choice(legal)
+
 
 @register_strategy("Greedy BFS")
 class GBFSStrategy(MoveStrategy):
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
         legal = snapshot.legal_moves_for(snake_id)
-        if not legal or not snapshot.apples:
-            return snapshot.snake(snake_id).direction
-
         snake = snapshot.snake(snake_id)
+        if not legal or not snapshot.apples:
+            return snake.direction
+
         head_x, head_y = snake.body[0]
-        body_set = set(snake.body)
+        start = (head_x, head_y)
+        obstacles = set(snake.body)
         
-        def heuristic(pos):
-            return min(abs(pos[0] - a[0]) + abs(pos[1] - a[1]) for a in snapshot.apples)
+        def heuristic(node: tuple[int, int]) -> int:
+            node_x, node_y = node
+            return min(abs(node_x - a_x) + abs(node_y - a_y) for a_x, a_y in snapshot.apples)
+
+        open_list = [start]
+        closed_set = set()
+        parent_map = {}
+
+        h_score = {start: heuristic(start)} 
+
+        while open_list:
+            current = min(open_list, key=h_score.get)
             
-        pq = [] 
-        visited = set()
-        visited.add((head_x, head_y))
-        
-        for d in Direction:
-            dx, dy = d.vector
-            new_pos = (head_x + dx, head_y + dy)
-            if (0 <= new_pos[0] < snapshot.columns) and (0 <= new_pos[1] < snapshot.rows):
-                if new_pos not in body_set:
-                    h = heuristic(new_pos)
-                    pq.append((h, new_pos, d))
-                    visited.add(new_pos)
-                    
-        while pq:
-            pq.sort(key=lambda x: x[0])
-            h, curr_pos, first_dir = pq.pop(0)
-            
-            if curr_pos in snapshot.apples:
-                return first_dir
+            if current in snapshot.apples:
+                path = []
+                curr = current
+                while curr in parent_map:
+                    path.append(curr)
+                    curr = parent_map[curr]
+                path.reverse()
                 
-            curr_x, curr_y = curr_pos
+                if path:
+                    next_x, next_y = path[0]
+                    dx, dy = next_x - head_x, next_y - head_y
+                    for move in legal:
+                        if move.vector == (dx, dy):
+                            return move
+                            
+            open_list.remove(current)
+            closed_set.add(current)
+
             for d in Direction:
                 dx, dy = d.vector
-                next_pos = (curr_x + dx, curr_y + dy)
+                new_x, new_y = current[0] + dx, current[1] + dy
+                new_node = (new_x, new_y)
                 
-                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
-                    if next_pos not in body_set and next_pos not in visited:
-                        visited.add(next_pos)
-                        h_next = heuristic(next_pos)
-                        pq.append((h_next, next_pos, first_dir))
+                if not (0 <= new_x < snapshot.columns and 0 <= new_y < snapshot.rows):
+                    continue
+                if new_node in obstacles or new_node in closed_set:
+                    continue
+                
+                if new_node not in open_list:
+                    parent_map[new_node] = current
+                    h_score[new_node] = heuristic(new_node)
+                    open_list.append(new_node)
                         
         return rng.choice(legal)
 
