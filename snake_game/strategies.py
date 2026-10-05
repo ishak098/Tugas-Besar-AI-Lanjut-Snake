@@ -350,60 +350,46 @@ class IDSStrategy(MoveStrategy):
 class BFSStrategy(MoveStrategy):
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
         # validasi: ambil langkah legal
-        legal = snapshot.legal_moves_for(snake_id)
         snake = snapshot.snake(snake_id)
+        legal = snapshot.legal_moves_for(snake_id)
         if not legal or not snapshot.apples:
             return snake.direction
 
-        # inisialisasi titik awal, obstakel, dan dimensi papan
-        head_x, head_y = snake.body[0]
-        start = (head_x, head_y)
-        obstacles = set(snake.body)
-        width, height = snapshot.columns, snapshot.rows
+        # inisialisasi titik awal, titik badan
+        head_x, head_y = snake.body[0] # Posisi kepala ular (x, y) 
+        body_set = set(snake.body) # Set koordinat badan sebagai rintangan
     
 
-        # Queue FIFO dan struktur penelusuran jalur 
-        queue = deque([start])
-        visited = {start}
-        parent_map = {}
+        # Queue FIFO dan set lokasi visited
+        queue = deque()
+        visited = set()
+        visited.add((head_x, head_y))
 
+        # jelajah langkah UDLR awal
+        for move in Direction:
+            dx, dy = move.vector
+            new_pos = head_x + dx, head_y + dy
+            if (0 <= new_pos[0] < snapshot.columns) and (0 <= new_pos[1] < snapshot.rows):
+                if new_pos not in body_set:
+                    queue.append((new_pos, move)) # simpan tuple 
+                    visited.add(new_pos)
+        # proses BFS (FIFO)
         while queue:
-            current = queue.popleft()
+            curr_pos, first_dir = queue.popleft() 
 
-            # jika ada apel, rekonstruksi jalur menuju titik pertama
-            if current in snapshot.apples:
-                curr = current
-                path = [0]
-                while curr in parent_map:
-                    path.append(curr)
-                    curr = parent_map[curr]
-                path.reverse()
-
-                # jika pathnya tidak kosong
-                if path:
-                    # koordinat pertama untuk bergerak
-                    next_x, next_y = path[0]
-                    # selisih dari kordinat kepala ular dan kordinat perpindahan
-                    dx, dy = next_x - head_x, next_y - head_y
-                    for move in legal:
-                        # selisihnya ada yang sama dengan arah (UDLR) atau tidak
-                        if move.vector == (dx, dy):
-                            return move
+            if curr_pos in snapshot.apples:
+                return first_dir    
+        
             # eksplore 4 arah
-            curr_x, curr_y = current
+            curr_x, curr_y = curr_pos
             for move in Direction:
                 dx, dy = move.vector
-                new_x, new_y = curr_x + dx, curr_y + dy
-                new_node = (new_x, new_y)
-                if not (0 <= new_x < width and 0 <= new_y < height):
-                    continue
-
-                if new_node in obstacles or new_node in visited:
-                    continue
-
-                visited.add(new_node)
-                parent_map[new_node] = current
-                queue.append(new_node)
+                next_pos = (curr_x + dx, curr_y + dy)
+                # cek papan dan rintangan
+                if (0 <= next_pos[0] < snapshot.columns) and (0 <= next_pos[1] < snapshot.rows):
+                    if next_pos not in body_set and next_pos not in visited:
+                        visited.add(next_pos)
+                        queue.append((next_pos, first_dir))
 
         return rng.choice(legal)
 
