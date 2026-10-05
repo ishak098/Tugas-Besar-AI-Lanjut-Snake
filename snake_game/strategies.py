@@ -393,4 +393,54 @@ class BFSStrategy(MoveStrategy):
 
         return rng.choice(legal)
 
+@register_strategy("Depth First Search")
+class DFSStrategy(MoveStrategy):
+    def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        snake = snapshot.snake(snake_id)
+        if not legal or not snapshot.apples:
+            return snake.direction
 
+        head_x, head_y = snake.body[0]
+        start = (head_x, head_y)
+        obstacles = set(snake.body)
+        
+        open_list = [start]
+        closed_set = set()
+        parent_map = {}
+
+        while open_list:
+            current = open_list.pop()
+            
+            if current in snapshot.apples:
+                path = []
+                curr = current
+                while curr in parent_map:
+                    path.append(curr)
+                    curr = parent_map[curr]
+                path.reverse()
+                
+                if path:
+                    next_x, next_y = path[0]
+                    dx, dy = next_x - head_x, next_y - head_y
+                    for move in legal:
+                        if move.vector == (dx, dy):
+                            return move
+                            
+            closed_set.add(current)
+
+            for d in Direction:
+                dx, dy = d.vector
+                new_x, new_y = current[0] + dx, current[1] + dy
+                new_node = (new_x, new_y)
+                
+                if not (0 <= new_x < snapshot.columns and 0 <= new_y < snapshot.rows):
+                    continue
+                if new_node in obstacles or new_node in closed_set:
+                    continue
+                
+                if new_node not in open_list:
+                    parent_map[new_node] = current
+                    open_list.append(new_node)
+                    
+        return rng.choice(legal)
