@@ -122,11 +122,9 @@ class AStarStrategy(MoveStrategy):
             # ambil kordinat dengan nilai terkecil perhitungan dari f_score dengan key yang ada di open_list
             current = min(open_list, key=f_score.get)
             if current in snapshot.apples:
-                # untuk mendaftar jalur menuju apel
                 path = []
                 curr = current
                 while curr in parent_map:
-                    # tambah jalur dari apel ke kepala ular
                     path.append(curr)
                     # menelurusi jalur asal titik
                     curr = parent_map[curr]
@@ -146,7 +144,7 @@ class AStarStrategy(MoveStrategy):
             for dx, dy in offset:
                 new_x, new_y = current[0] + dx, current[1] + dy
                 new_node = (new_x, new_y)
-                if new_x < 0 or new_x < snapshot.columns or new_y < 0 or new_y < snapshot.rows:
+                if not (0 <= new_x < snapshot.columns and 0 <= new_y < snapshot.rows):
                     continue
                 if new_node in obstacles or new_node in closed_set:
                     # Lewati jika node sudah dikunjungi
@@ -439,3 +437,190 @@ class DFSStrategy(MoveStrategy):
                     open_list.append(new_node)
                     
         return rng.choice(legal)
+
+@register_strategy("Alfa Beta Purning")
+class AlfaBetaPurningStrategy(MoveStrategy):
+    def _is_alive(self, snake) -> bool:
+        alive_attr = getattr(snake, "is_alive", getattr(snake, "alive", True))
+        return alive_attr() if callable(alive_attr) else bool(alive_attr)
+
+    def choose_move(
+        self, snapshot: GameSnapshot, snake_id: str, rng: Random
+    ) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        snake = snapshot.snake(snake_id)
+        if not legal or not snapshot.apples:
+            return snake.direction
+
+        head_x, head_y = snake.body[0]
+        max_depth = 4
+
+        # 1. Saat ada makanan yang bisa langsung dimakan dalam 1 langkah
+        for move in legal:
+            dx, dy = move.vector
+            next_pos = (head_x + dx, head_y + dy)
+            if next_pos in snapshot.apples:
+                return move
+
+        best_move = legal[0]
+        best_value = -float("inf")
+        alpha = -float("inf")
+        beta = float("inf")
+        for move in legal:
+            dx, dy = move.vector
+            next_head = (head_x + dx, head_y + dy)
+
+            # panggil rekursi Minimax
+            move_value = self.minimax(
+                snapshot=snapshot,
+                current_head=next_head,
+                depth=max_depth - 1,
+                alpha=alpha,
+                beta=beta,
+                maximizing=False,  # Giliran musuh
+                snake_id=snake_id,
+            )
+
+            if move_value > best_value:
+                best_value = move_value
+                best_move = move
+
+            # Update Alpha di level teratas
+            alpha = max(alpha, best_value)
+            if beta <= alpha:
+                break  #purning
+
+        return best_move
+
+    def minimax(
+        self,
+        snapshot: GameSnapshot,
+        current_head: tuple[int, int],
+        depth: int,
+        alpha: float,
+        beta: float,
+        maximizing: bool,
+        snake_id: str,
+    ) -> float:
+        if not self.safe_position(snapshot, current_head):
+            return -100000.0  # Penalti maksimal jika mati / menabrak
+
+        # Base Case: Jika batas depth tercapai atau menemukan apel
+        if depth == 0 or current_head in snapshot.apples:
+            return self.evaluate_heuristic(snapshot, current_head, snake_id)
+
+        directions_offset = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+
+        if maximizing:
+            max_eval = -float("inf")
+            for dx, dy in directions_offset:
+                next_node = (current_head[0] + dx, current_head[1] + dy)
+
+                eval_score = self.minimax(
+                    snapshot, next_node, depth - 1, alpha, beta, False, snake_id
+                )
+                max_eval = max(max_eval, eval_score)
+                alpha = max(alpha, max_eval)
+
+                if beta <= alpha:
+                    break
+            return max_eval
+
+        #min
+        else:
+            min_eval = float("inf")
+            snakes = (
+                snapshot.snakes.values()
+                if hasattr(snapshot.snakes, "values")
+                else snapshot.snakes
+            )
+            other_snakes = [
+                s
+                for s in snakes
+                if getattr(s, "id", getattr(s, "snake_id", None)) != snake_id
+                and self._is_alive(s)
+            ]
+
+            if other_snakes:
+                for dx, dy in directions_offset:
+                    # pergerakan musuh
+                    eval_score = self.minimax(
+                        snapshot,
+                        current_head,
+                        depth - 1,
+                        alpha,
+                        beta,
+                        True,
+                        snake_id,
+                    )
+                    min_eval = min(min_eval, eval_score)
+                    beta = min(beta, min_eval)
+
+                    if beta <= alpha:
+                        break
+            else:
+                # Jika tidak ada musuh, langsung kembalikan nilai evaluasi
+                min_eval = self.evaluate_heuristic(
+                    snapshot, current_head, snake_id
+                )
+
+            return min_eval
+
+    def evaluate_heuristic(
+        self, snapshot: GameSnapshot, head: tuple[int, int], snake_id: str
+    ) -> float:
+        #Evaluasi berdasarkan Jarak Manhattan ke Apel & Penalti Musuh.
+        if not snapshot.apples:
+            return 0.0
+
+        # Hitung jarak terdekat ke apel (Manhattan Distance)
+        min_apple_distance = min(
+            abs(head[0] - apple_x) + abs(head[1] - apple_y)
+            for apple_x, apple_y in snapshot.apples
+        )
+
+        if min_apple_distance == 0:
+            return 10000.0  # Skor tinggi jika memakan apel
+
+        # Bobot skor makanan
+        food_score = 200.0 / (min_apple_distance + 1)
+
+        # Penalti jika terlalu dekat dengan musuh
+        enemy_penalty = 0.0
+        snakes = (
+            snapshot.snakes.values()
+            if hasattr(snapshot.snakes, "values")
+            else snapshot.snakes
+        )
+        for s in snakes:
+            s_id = getattr(s, "id", getattr(s, "snake_id", None))
+            if s_id != snake_id and self._is_alive(s):
+                enemy_head = s.body[0]
+                enemy_dist = abs(head[0] - enemy_head[0]) + abs(
+                    head[1] - enemy_head[1]
+                )
+                if enemy_dist < 3:
+                    enemy_penalty += (3 - enemy_dist) * 15.0
+
+        return food_score - enemy_penalty
+
+    def safe_position(
+        self, snapshot: GameSnapshot, pos: tuple[int, int]
+    ) -> bool:
+        # pengecekan papan permainan
+        x, y = pos
+
+        if not (0 <= x < snapshot.columns and 0 <= y < snapshot.rows):
+            return False
+
+        # Cek tabrakan dengan semua tubuh ular yang hidup
+        snakes = (
+            snapshot.snakes.values()
+            if hasattr(snapshot.snakes, "values")
+            else snapshot.snakes
+        )
+        for snake in snakes:
+            if self._is_alive(snake) and pos in snake.body:
+                return False
+
+        return True
